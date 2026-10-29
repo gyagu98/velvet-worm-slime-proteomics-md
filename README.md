@@ -92,6 +92,7 @@ Expected outputs include:
 - Representative per-protein `*_disorder_profile.png` figures
 - `sequence_summary.json`
 - `analysis_report.md`
+- `report.html` (self-contained HTML; peptide results are explicitly theoretical and not experimental proteomics evidence)
 
 ### Run the molecular-dynamics demonstration
 
@@ -109,6 +110,17 @@ slime-proteo-md smd \
   --platform CPU \
   --out results/smd_demo/
 ```
+
+When the SMD output directory is inside the analysis directory (for example, `results/smd_demo/`), the workflow automatically refreshes `results/report.html` to include both peptide predictions and SMD metrics. Otherwise, combine existing outputs explicitly:
+
+```bash
+slime-proteo-md report \
+  --analysis-dir results/ \
+  --smd-dir results/smd_demo/ \
+  --out results/report.html
+```
+
+The HTML embeds available plots, labels sequence-derived peptide values as theoretical predictions, identifies the SMD values as simulation outputs, and states that experimental MS/MS data were not provided. It is reproducible from the generated CSV/JSON files and can be opened locally without a web server.
 
 This is a **method demonstration** on an idealized short peptide. The `--conformation` choices are `extended` and `polyproline_ii`. Results include `initial_peptide.pdb`, `smd_trajectory.pdb`, `smd_force_extension.csv`, `smd_mechanics_summary.json`, and `smd_mechanics.png`.
 

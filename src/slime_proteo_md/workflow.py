@@ -16,6 +16,7 @@ from .structure import generate_peptide_pdb
 from .md_engine import run_steered_md
 from .analysis import analyze_mechanics
 from .visualization import plot_proteomics_overview, plot_disorder_profile, plot_smd_mechanics
+from .report import generate_html_report
 
 
 def ensure_directory(path: str) -> None:
@@ -220,6 +221,19 @@ def analyze_sequence_dataset(
         f.write("```bash\nslime-proteo-md smd --sequence PSEPGYPGQPSEPGYP --out results/smd_example/ --steps 1000 --pull-velocity 0.02\n```\n")
         f.write("\n**Workflow status: research scaffold.** The provided sequence files were analyzed computationally; no wet-lab proteomics data were supplied.\n")
 
+    # 10. Self-contained HTML report (theoretical results only unless an external SMD run is supplied)
+    generate_html_report(
+        summary=summary,
+        protein_rows=protein_rows,
+        peptide_rows=peptide_rows,
+        overview_img_path=str(output_dir / "proteomics_overview.png"),
+        output_html_path=str(output_dir / "report.html"),
+    )
+    if "report.html" not in summary["generated_outputs"]:
+        summary["generated_outputs"].append("report.html")
+        with open(output_dir / "sequence_summary.json", "w", encoding="utf-8") as f:
+            json.dump(summary, f, indent=2)
+
     return summary
 
 
@@ -274,12 +288,32 @@ def run_smd_for_motif(
         for frame in result.frames:
             writer.writerow(frame.__dict__)
 
-    # Mechanics summary
+    # Mechanics summary plus explicit simulation settings for report provenance.
     mechanics = analyze_mechanics(result)
+    mechanics.update({
+        "total_steps": result.total_steps,
+        "total_time_ps": result.total_time_ps,
+        "spring_k_kj_mol_nm2": spring_k_kj_mol_nm2,
+        "temperature_k": temperature_k,
+        "conformation": conformation,
+        "platform": platform_name,
+        "total_work_kcal_mol": round(mechanics.get("total_work_kj_mol", 0.0) / 4.184, 4),
+    })
     with open(output_dir / "smd_mechanics_summary.json", "w", encoding="utf-8") as f:
         json.dump(mechanics, f, indent=2)
 
     # SMD figure
     plot_smd_mechanics(result, str(output_dir / "smd_mechanics.png"))
+
+    # If the SMD directory is nested under a completed sequence analysis directory,
+    # regenerate a combined report with both data products.
+    analysis_dir = output_dir.parent
+    if (analysis_dir / "protein_properties.csv").is_file():
+        from .report import build_report_from_directories
+        build_report_from_directories(
+            analysis_dir=str(analysis_dir),
+            smd_dir=str(output_dir),
+            output_html_path=str(analysis_dir / "report.html"),
+        )
 
     return mechanics

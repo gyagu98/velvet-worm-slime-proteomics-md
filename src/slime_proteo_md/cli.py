@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .sequence import load_slime_dataset
 from .workflow import analyze_sequence_dataset, run_smd_for_motif
+from .report import build_report_from_directories
 from .proteomics import analyze_protein_properties, sliding_window_profile
 
 
@@ -49,6 +50,15 @@ def main(argv=None):
     smd_p.add_argument("--spring-k", type=float, default=500.0, help="Pulling spring constant in kJ/mol/nm^2 (default 500).")
     smd_p.add_argument("--temperature", type=float, default=300.0, help="Temperature in Kelvin (default 300).")
     smd_p.add_argument("--platform", choices=["CPU", "Reference"], default="CPU", help="OpenMM platform.")
+
+    # Report subcommand
+    report_p = subparsers.add_parser(
+        "report",
+        help="Generate a self-contained HTML report from existing proteomics and optional SMD results.",
+    )
+    report_p.add_argument("--analysis-dir", required=True, help="Directory containing sequence analysis CSV/JSON outputs.")
+    report_p.add_argument("--smd-dir", help="Optional directory containing SMD mechanics JSON and plot outputs.")
+    report_p.add_argument("--out", required=True, help="Output HTML file path.")
 
     args = parser.parse_args(argv)
 
@@ -103,6 +113,14 @@ def main(argv=None):
         print(f"  Peak force: {mechanics['peak_rupture_force_pn']:.2f} pN")
         print(f"  Mechanical work: {mechanics['total_work_kj_mol']:.2f} kJ/mol")
         print(f"  Results written to: {args.out}")
+
+    elif args.command == "report":
+        build_report_from_directories(
+            analysis_dir=args.analysis_dir,
+            smd_dir=args.smd_dir,
+            output_html_path=args.out,
+        )
+        print(f"HTML report written to: {args.out}")
 
 
 if __name__ == "__main__":
