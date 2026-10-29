@@ -85,6 +85,14 @@ def main(argv=None):
             min_peptide_length=args.min_peptide_length,
             max_peptide_length=args.max_peptide_length,
             missed_cleavages=args.missed_cleavages,
+            cli_parameters={
+                "fasta": args.fasta,
+                "out": args.out,
+                "ph": args.ph,
+                "missed_cleavages": args.missed_cleavages,
+                "min_peptide_length": args.min_peptide_length,
+                "max_peptide_length": args.max_peptide_length,
+            },
         )
         print("\nAnalysis completed successfully!")
         print(f"  FASTA records: {summary['num_entries']}")

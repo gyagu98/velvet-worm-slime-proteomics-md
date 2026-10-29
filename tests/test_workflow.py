@@ -65,3 +65,35 @@ def test_build_report_from_directories_with_smd(tmp_path):
     assert "PSEPGYPGQPSEPGYP" in report
     assert "SMD Peak Force" in report
     assert "No wet-lab mass spectrometry spectra" in report
+
+
+def test_workflow_generates_manifest_and_embeds_hashes(tmp_path):
+    import json
+    root = Path(__file__).resolve().parents[1]
+    analysis_dir = tmp_path / "analysis"
+    analyze_sequence_dataset(
+        [
+            str(root / "data/Peripatus_slime_7_PH_no_gaps.fasta"),
+            str(root / "data/Peripatus_slime_7_PM_no_gaps.fasta"),
+        ],
+        str(analysis_dir),
+    )
+    manifest_file = analysis_dir / "run_manifest.json"
+    assert manifest_file.exists()
+    data = json.loads(manifest_file.read_text(encoding="utf-8"))
+    assert data["command"] == "analyze"
+    assert "run_timestamp_utc" in data
+    assert "environment" in data
+    assert "python" in data["environment"]
+    assert len(data["inputs"]) == 2
+    for item in data["inputs"]:
+        assert item["sha256"] is not None
+        assert len(item["sha256"]) == 64
+        assert item["size_bytes"] > 0
+
+    # Verify that the HTML report contains the manifest audit card with the input file hashes
+    html_report = (analysis_dir / "report.html").read_text(encoding="utf-8")
+    assert "Reproducibility Run Manifest" in html_report
+    assert "SHA-256 Verified Audit" in html_report
+    assert data["inputs"][0]["sha256"] in html_report
+    assert data["inputs"][1]["sha256"] in html_report

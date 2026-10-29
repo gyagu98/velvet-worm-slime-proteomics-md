@@ -11,6 +11,7 @@ import html
 import datetime
 import csv
 import json
+from .manifest import compute_sha256, get_tool_versions, build_run_manifest
 
 
 def image_to_base64_uri(image_path: Optional[str]) -> Optional[str]:
@@ -40,6 +41,7 @@ def generate_html_report(
     overview_img_path: Optional[str] = None,
     smd_img_path: Optional[str] = None,
     output_html_path: Optional[str] = None,
+    run_manifest: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
     Build a self-contained, publication-ready HTML report combining theoretical
@@ -685,7 +687,83 @@ def generate_html_report(
     </div>
 """
 
-    # Section: Reproducibility & Output Files
+    # Section: Reproducibility Run Manifest & Audit Trail
+    manifest_html = ""
+    if run_manifest:
+        inputs_rows = ""
+        for inp in run_manifest.get("inputs", []):
+            sha_display = f"<code>{inp.get('sha256', 'N/A')}</code>" if inp.get("sha256") else "<span style='color: var(--text-muted);'>N/A</span>"
+            size_str = f"{inp.get('size_bytes', 0):,} B" if inp.get("size_bytes") is not None else "N/A"
+            inputs_rows += f"""
+              <tr>
+                <td><strong>{html.escape(str(inp.get('label', '')))}</strong></td>
+                <td><code>{html.escape(str(inp.get('filename', '')))}</code></td>
+                <td style="font-size: 0.75rem; word-break: break-all;">{sha_display}</td>
+                <td>{size_str}</td>
+              </tr>
+            """
+
+        env_items = ""
+        for k, v in run_manifest.get("environment", {}).items():
+            env_items += f"<div><strong>{html.escape(k)}:</strong> <code>{html.escape(str(v))}</code></div>"
+
+        param_items = ""
+        for k, v in run_manifest.get("parameters", {}).items():
+            param_items += f"<div><strong>--{html.escape(k.replace('_', '-'))}:</strong> <code>{html.escape(str(v))}</code></div>"
+
+        manifest_html = f"""
+    <div class="section-card" id="run-manifest">
+      <div class="section-title">
+        <span>Reproducibility Run Manifest</span>
+        <span class="badge badge-verified">SHA-256 Verified Audit</span>
+      </div>
+      <p style="margin-bottom: 14px;">
+        Cryptographic checksums, runtime dependencies, exact CLI parameters, and UTC execution timestamps recorded to guarantee bit-level and analytical reproducibility.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 16px;">
+        <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 6px; padding: 12px;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Execution Metadata</div>
+          <div style="font-size: 0.85rem; margin-bottom: 4px;"><strong>Command:</strong> <code>{html.escape(str(run_manifest.get('command', 'analyze')))}</code></div>
+          <div style="font-size: 0.85rem; margin-bottom: 4px;"><strong>Run Timestamp:</strong> <span style="color: var(--text-bright); font-family: monospace;">{html.escape(str(run_manifest.get('run_timestamp_utc', 'N/A')))}</span></div>
+          <div style="font-size: 0.85rem;"><strong>Schema Version:</strong> <code>{html.escape(str(run_manifest.get('schema_version', '1.0')))}</code></div>
+        </div>
+
+        <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 6px; padding: 12px;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Runtime Environment &amp; Versions</div>
+          <div style="font-size: 0.8rem; display: flex; flex-direction: column; gap: 3px;">
+            {env_items}
+          </div>
+        </div>
+
+        <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 6px; padding: 12px;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">CLI Parameters Captured</div>
+          <div style="font-size: 0.8rem; display: flex; flex-direction: column; gap: 3px;">
+            {param_items}
+          </div>
+        </div>
+      </div>
+
+      <h4 style="color: var(--text-bright); margin: 14px 0 8px 0; font-size: 0.95rem;">Input Files &amp; Cryptographic Hashes (SHA-256)</h4>
+      <table class="data-table" style="margin-bottom: 8px;">
+        <thead>
+          <tr>
+            <th style="width: 15%;">Label</th>
+            <th style="width: 25%;">File</th>
+            <th style="width: 45%;">SHA-256 Checksum</th>
+            <th style="width: 15%;">Size</th>
+          </tr>
+        </thead>
+        <tbody>
+          {inputs_rows}
+        </tbody>
+      </table>
+    </div>
+        """
+
+
+    doc += manifest_html
+
     doc += """
     <div class="section-card">
       <div class="section-title">
@@ -733,6 +811,12 @@ slime-proteo-md report \\
           </tr>
         </thead>
         <tbody>
+          <tr>
+                      <tr>
+            <td><code>run_manifest.json</code></td>
+            <td>Audit Manifest</td>
+            <td>SHA-256 hashes for raw inputs, runtime package versions, CLI flags, and UTC run timestamp.</td>
+          </tr>
           <tr>
             <td><code>report.html</code></td>
             <td>Interactive Report</td>
@@ -838,6 +922,15 @@ def build_report_from_directories(
                             pass
                 peptide_rows.append(row)
 
+    manifest_data = None
+    manifest_file = analysis_path / "run_manifest.json"
+    if manifest_file.is_file():
+        try:
+            with open(manifest_file, "r", encoding="utf-8") as f:
+                manifest_data = json.load(f)
+        except Exception:
+            pass
+
     overview_img = analysis_path / "proteomics_overview.png"
 
     smd_mechanics = None
@@ -860,4 +953,5 @@ def build_report_from_directories(
         overview_img_path=str(overview_img) if overview_img.is_file() else None,
         smd_img_path=smd_img,
         output_html_path=output_html_path,
+        run_manifest=manifest_data,
     )

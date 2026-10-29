@@ -17,6 +17,7 @@ from .md_engine import run_steered_md
 from .analysis import analyze_mechanics
 from .visualization import plot_proteomics_overview, plot_disorder_profile, plot_smd_mechanics
 from .report import generate_html_report
+from .manifest import build_run_manifest
 
 
 def ensure_directory(path: str) -> None:
@@ -27,6 +28,7 @@ def analyze_sequence_dataset(
     fasta_paths: List[str], output_dir: str, ph: float = 7.4,
     min_peptide_length: int = 6, max_peptide_length: int = 40,
     missed_cleavages: int = 1,
+    cli_parameters: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Run sequence/physicochemical analysis and in silico proteomics workflow."""
     output_dir = Path(output_dir)
@@ -221,13 +223,35 @@ def analyze_sequence_dataset(
         f.write("```bash\nslime-proteo-md smd --sequence PSEPGYPGQPSEPGYP --out results/smd_example/ --steps 1000 --pull-velocity 0.02\n```\n")
         f.write("\n**Workflow status: research scaffold.** The provided sequence files were analyzed computationally; no wet-lab proteomics data were supplied.\n")
 
-    # 10. Self-contained HTML report (theoretical results only unless an external SMD run is supplied)
+    # 10. Record exact inputs, parameters, environment versions, and UTC run time.
+    manifest = build_run_manifest(
+        command="analyze",
+        parameters=cli_parameters or {
+            "fasta": [str(path) for path in fasta_paths],
+            "out": str(output_dir),
+            "ph": ph,
+            "missed_cleavages": missed_cleavages,
+            "min_peptide_length": min_peptide_length,
+            "max_peptide_length": max_peptide_length,
+        },
+        input_files={f"fasta_{i + 1}": path for i, path in enumerate(fasta_paths)},
+    )
+    manifest_path = output_dir / "run_manifest.json"
+    with manifest_path.open("w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    summary["generated_outputs"].extend(["run_manifest.json", "report.html"])
+    summary["generated_outputs"] = list(dict.fromkeys(x for x in summary["generated_outputs"] if x))
+    with open(output_dir / "sequence_summary.json", "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2)
+
+    # 11. Self-contained HTML report (theoretical results only unless an external SMD run is supplied)
     generate_html_report(
         summary=summary,
         protein_rows=protein_rows,
         peptide_rows=peptide_rows,
         overview_img_path=str(output_dir / "proteomics_overview.png"),
         output_html_path=str(output_dir / "report.html"),
+        run_manifest=manifest,
     )
     if "report.html" not in summary["generated_outputs"]:
         summary["generated_outputs"].append("report.html")
@@ -301,6 +325,24 @@ def run_smd_for_motif(
     })
     with open(output_dir / "smd_mechanics_summary.json", "w", encoding="utf-8") as f:
         json.dump(mechanics, f, indent=2)
+
+    smd_manifest = build_run_manifest(
+        command="smd",
+        parameters={
+            "sequence": clean_seq,
+            "out": str(output_dir),
+            "conformation": conformation,
+            "steps": steps,
+            "report_interval": report_interval,
+            "pull_velocity_nm_ps": pull_velocity_nm_ps,
+            "spring_k_kj_mol_nm2": spring_k_kj_mol_nm2,
+            "temperature_k": temperature_k,
+            "platform": platform_name,
+        },
+        input_files={"initial_peptide_pdb": pdb_path},
+    )
+    with (output_dir / "smd_run_manifest.json").open("w", encoding="utf-8") as f:
+        json.dump(smd_manifest, f, indent=2)
 
     # SMD figure
     plot_smd_mechanics(result, str(output_dir / "smd_mechanics.png"))
