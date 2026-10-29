@@ -359,3 +359,71 @@ def run_smd_for_motif(
         )
 
     return mechanics
+
+from .docking import run_docking, ensure_vina_binary
+from .visualization import plot_docking_affinities
+
+
+def run_docking_for_slime_receptor(
+    *,
+    receptor_sequence: Optional[str] = None,
+    receptor_pdb_path: Optional[str] = None,
+    ligand_smiles: str = "CC(=O)Oc1ccccc1C(=O)O", # Default aspirin test ligand
+    output_dir: Path | str = "results/docking_demo",
+    conformation: str = "extended",
+    exhaustiveness: int = 4,
+    num_modes: int = 5,
+    seed: int = 42,
+    vina_binary: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Execute small-molecule docking against a modeled slime peptide receptor.
+
+    If receptor_pdb_path is not provided, an idealized peptide structure is generated
+    from receptor_sequence (defaulting to a conserved slime proline-rich motif).
+    """
+    out_p = Path(output_dir)
+    out_p.mkdir(parents=True, exist_ok=True)
+
+    if not receptor_pdb_path:
+        seq = receptor_sequence or "PSEPGYPGQPSEPGYP"
+        rec_pdb = out_p / "modeled_receptor_peptide.pdb"
+        generate_peptide_pdb(seq, conformation=conformation, output_filepath=str(rec_pdb))
+        receptor_pdb_path = str(rec_pdb)
+
+    dock_res = run_docking(
+        receptor_pdb=receptor_pdb_path,
+        ligand_smiles=ligand_smiles,
+        output_dir=out_p,
+        vina_binary=vina_binary,
+        exhaustiveness=exhaustiveness,
+        num_modes=num_modes,
+        seed=seed,
+    )
+
+    plot_path = str(out_p / "docking_affinities.png")
+    plot_docking_affinities(
+        poses=dock_res["poses"],
+        output_png_path=plot_path,
+        ligand_name=ligand_smiles,
+    )
+    dock_res["files"]["affinity_plot_png"] = plot_path
+
+    # Record reproducibility run manifest
+    dock_manifest = build_run_manifest(
+        command="dock",
+        parameters={
+            "receptor_sequence": receptor_sequence,
+            "receptor_pdb_path": receptor_pdb_path,
+            "ligand_smiles": ligand_smiles,
+            "out": str(output_dir),
+            "conformation": conformation,
+            "exhaustiveness": exhaustiveness,
+            "num_modes": num_modes,
+            "seed": seed,
+        },
+        input_files={"receptor_pdb": receptor_pdb_path},
+    )
+    with (out_p / "docking_run_manifest.json").open("w", encoding="utf-8") as f:
+        json.dump(dock_manifest, f, indent=2)
+
+    return dock_res

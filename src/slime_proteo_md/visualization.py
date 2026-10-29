@@ -196,3 +196,49 @@ def plot_smd_mechanics(smd_result: SMDResult, output_path: str) -> None:
     plt.tight_layout()
     plt.savefig(output_path, dpi=300)
     plt.close()
+
+
+def plot_docking_affinities(
+    poses: List[Dict[str, Any]],
+    output_png_path: str,
+    ligand_name: str = "Candidate Ligand",
+) -> str:
+    """Plot binding affinity across predicted AutoDock Vina pose modes."""
+    if not poses:
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.text(0.5, 0.5, "No docking poses generated", ha="center", va="center")
+        plt.tight_layout()
+        plt.savefig(output_png_path, dpi=150)
+        plt.close(fig)
+        return output_png_path
+
+    modes = [p["mode"] for p in poses]
+    affinities = [p["affinity_kcal_mol"] for p in poses]
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    bars = ax.bar([f"Mode {m}" for m in modes], affinities, color="#2b5c8f", edgecolor="#1a365d", width=0.6)
+    ax.axhline(0, color="gray", linestyle="--", linewidth=0.8)
+
+    for bar, aff in zip(bars, affinities):
+        yval = bar.get_height()
+        va = "bottom" if yval < 0 else "top"
+        offset = -0.15 if yval < 0 else 0.15
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            yval + offset,
+            f"{aff:.2f}",
+            ha="center",
+            va=va,
+            fontsize=9,
+            fontweight="bold",
+        )
+
+    ax.set_ylabel("Calculated Binding Affinity (kcal/mol)", fontsize=11)
+    ax.set_xlabel("Vina Pose Mode", fontsize=11)
+    ax.set_title(f"In Silico Docking Affinity: {ligand_name}", fontsize=12, fontweight="bold")
+    ax.grid(axis="y", linestyle=":", alpha=0.5)
+
+    plt.tight_layout()
+    plt.savefig(output_png_path, dpi=150)
+    plt.close(fig)
+    return output_png_path

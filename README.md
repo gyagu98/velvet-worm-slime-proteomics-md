@@ -124,6 +124,28 @@ The HTML embeds available plots, labels sequence-derived peptide values as theor
 
 This is a **method demonstration** on an idealized short peptide. The `--conformation` choices are `extended` and `polyproline_ii`. Results include `initial_peptide.pdb`, `smd_trajectory.pdb`, `smd_force_extension.csv`, `smd_mechanics_summary.json`, and `smd_mechanics.png`.
 
+### Run small-molecule ligand docking (AutoDock Vina)
+
+Test candidate small-molecule binding modes and predicted affinities (kcal/mol) against a modeled slime peptide motif or user-provided PDB receptor:
+
+```bash
+slime-proteo-md dock \
+  --sequence PSEPGYPGQPSEPGYP \
+  --ligand-smiles "CC(=O)Oc1ccccc1C(=O)O" \
+  --exhaustiveness 4 \
+  --num-modes 5 \
+  --out results/docking_demo/
+```
+
+Results written to `results/docking_demo/` include:
+- `receptor.pdbqt` and `ligand.pdbqt` (prepared with Gasteiger charges and Meeko rotatable bond trees)
+- `docked_poses.pdbqt` (all docked ligand conformers and orientations)
+- `docking_summary.json` (predicted affinities, RMSD lower/upper bounds, and grid dimensions)
+- `docking_affinities.png` (pose ranking bar chart)
+- `docking_run_manifest.json` (cryptographic SHA-256 hashes and environment audit)
+
+> **Scientific caveat:** Docking against an idealized or unrelaxed peptide model provides an algorithmic demonstration of conformational sampling and scoring; it is an exploratory computational hypothesis and does **not** constitute experimental binding affinity or biological target engagement.
+
 ### Docker
 
 ```bash
